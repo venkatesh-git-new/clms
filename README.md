@@ -1,141 +1,346 @@
-# College Leave Management System — Frontend
+# College Leave Management System (CLMS)
 
-## Project overview
+A full-stack College Leave Management System for a four-role college workflow: **Administrator**, **Head of Department (HOD)**, **Class Tutor**, and **Parent / Guardian**.
 
-A frontend-only College Leave Management System prototype for a four-role college workflow: **Administrator**, **Head of Department (HOD)**, **Class Tutor**, and **Parent / Guardian**.
+Architecture: **MERN stack** (MongoDB, Express, React, Node.js) with Socket.IO for real-time notifications.
 
-The project is a local demonstration. It uses seeded sample data and browser storage instead of a backend, and it makes no network requests to a college system. All account relationships, permissions, notifications, and leave decisions are simulated in the browser.
+- **Backend** (`backend/`): Express 5 + Mongoose 9 + MongoDB + JWT access/refresh tokens + Socket.IO.
+- **Frontend** (`frontend/`): React 18 + Vite 5 + React Router 6 + Tailwind CSS + React Hook Form + Zod + Recharts + jsPDF + socket.io-client.
+
+Two deploy modes:
+1. **Backend mode** (default): Real REST API + MongoDB; Socket.IO pushes live notifications.
+2. **Demo mode**: Browser `localStorage` fallback (`demoStore.js`) when no backend token is present.
 
 > This is an independent academic prototype. The visual design is inspired by the Thiagarajar College of Engineering (TCE) design language, but the project is not affiliated with or endorsed by the college. Do not use it for real administrative decisions.
 
-## Frontend technologies
+---
 
-- React 18 and React Router 6
-- Vite 5
-- Tailwind CSS and PostCSS
-- React Hook Form and Zod
-- Recharts, Lucide React, React Hot Toast, and jsPDF
-- ESLint
-- Node.js built-in test runner (`node --test`)
+## Tech stack
 
-## User roles and main features
+### Frontend (`frontend/`)
 
-### Administrator (`/admin/login`)
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Framework | React 18 | UI library |
+| Build tool | Vite 5 | Dev server + production build |
+| Routing | React Router 6 | Role-based protected routes |
+| Styling | Tailwind CSS + PostCSS | Utility-first CSS |
+| Forms | React Hook Form + Zod | Form state + schema validation |
+| Charts | Recharts | Dashboard analytics |
+| Icons | Lucide React | Iconography |
+| Notifications | React Hot Toast | Toast alerts |
+| PDF | jsPDF | Leave letter generation |
+| HTTP client | Axios | API calls with auth retry / refresh |
+| Real-time | socket.io-client | Live notification push |
+| Testing | Node built-in test runner | Unit / integration tests |
+| Linting | ESLint 9 | Code quality |
 
-- College-wide dashboard with department, HOD, class, student, tutor, parent, and leave statistics.
-- Manage departments, HODs, classes, class tutors, students, and parent/guardian records.
-- Review account status and simulate account activation and password-reset flows.
-- View **all** leave requests and department-wise reports in a read-only oversight view.
-- Routine leave approvals remain with the department HOD.
+### Backend (`backend/`)
 
-### Head of Department (`/login/hod`)
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Runtime | Node.js (>=20) | Server runtime |
+| Framework | Express 5 | REST API |
+| ODM | Mongoose 9 | MongoDB object modeling |
+| Database | MongoDB | Document store |
+| Password hashing | bcryptjs | Secure password storage |
+| Auth tokens | jsonwebtoken | Access + refresh JWTs |
+| Cookie handling | cookie-parser | HttpOnly refresh-token cookie |
+| CORS | cors | Cross-origin requests |
+| Security | helmet | HTTP header hardening |
+| Rate limiting | express-rate-limit | Abuse protection |
+| Logging | morgan | HTTP request logger |
+| File uploads | multer | Supporting documents (<=5 MB) |
+| Real-time | socket.io | WebSocket notifications |
+| Validation | zod | Environment + input schemas |
+| Dev tooling | nodemon | Auto-restart in dev |
 
-- Department-scoped dashboard showing the department name, HOD name, student totals, and pending/approved/rejected leave counts.
-- Review new and reopened leave applications for the HOD's own department only.
-- Approve a request, reject it with a mandatory reason, or reopen it for correction with a mandatory reason.
-- Reopening preserves the earlier decision in the application history and returns the request to the parent.
-- Approval records the HOD identity, decision date, remarks, and audit history.
+### Infrastructure
 
-### Class Tutor (`/login/tutor`)
+| Item | Value |
+|------|-------|
+| Database | MongoDB 7 in Docker (`clms-mongo`), port 27017, database `clms` |
+| Ports | Backend 5000, Frontend 5173 |
+| Proxy | Vite dev server proxies `/api` and `/socket.io` to `http://localhost:5000` |
 
-- View assigned classes and students.
-- Receive approved-leave updates only for the tutor's own class, after HOD approval.
-- Pending and rejected applications are never shown in the tutor portal.
-- Rejections never generate tutor notifications.
+---
 
-### Parent / Guardian (`/login/parent`)
+## Roles (4)
 
-- View only the children linked to the signed-in parent account.
-- Multiple children per parent are supported.
-- Submit a leave application with leave type, a valid date range, a minimum reason length, and optional PDF/JPG/PNG documents up to 5 MB.
-- Track application status, decision history, and HOD remarks.
-- Download an approved leave letter PDF that is clearly marked as a demonstration document.
+| Role | Scope |
+|------|-------|
+| **Administrator** | College-wide oversight. Manage departments, HODs, classes, tutors, students, parents. Read-only view of all leave requests and reports. |
+| **Head of Department (HOD)** | Department-scoped. Review, approve, reject, or reopen leave applications for their own department only. |
+| **Class Tutor** | View assigned classes and students. See only APPROVED leaves for their assigned classes. |
+| **Parent / Guardian** | View linked children only. Submit leave applications. Track status and download approved leave letter PDFs. |
 
-### Cross-role behaviour
-
-- Dashboard sidebars and protected routes are rebuilt per role.
-- Parent submissions resolve `student → class → department → department HOD`, so only that department's HOD is notified.
-- Approvals resolve `student → class → assigned tutor`, so only that class tutor is notified.
-- Notifications are addressed to individual accounts rather than entire roles.
-- The demo dataset is validated when it is seeded or reset; broken relationships are reported rather than silently repaired.
+---
 
 ## Project structure
 
-```text
+```
 Leave-Letter-Management/
 ├── README.md
-├── DEMO_CREDENTIALS.md        # Development-only fictional accounts
+├── PROJECT_REPORT.txt   # Full project report (366 lines)
+├── win_setup.txt        # Windows 10 setup guide
 ├── .gitignore
-└── frontend/
-    ├── public/
-    │   └── brand/             # Logo assets
-    ├── src/
-    │   ├── components/        # Shared UI, layout, forms, admin CRUD, leave workflow
-    │   ├── constants/         # Roles, navigation, leave and notification metadata
-    │   ├── context/           # Simulated authentication and data providers
-    │   ├── data/              # Seeded accounts and demo records
-    │   ├── hooks/             # Reusable React hooks
-    │   ├── lib/               # Date, CSV, PDF, and utility helpers
-    │   ├── pages/             # admin, hod, tutor, parent, auth, public, shared
-    │   ├── services/          # Demo store, selectors, validation, and tests
-    │   ├── App.jsx
-    │   └── main.jsx
+├── backend/             # Express + MongoDB + Socket.IO API
+│   ├── package.json
+│   ├── .env / .env.example
+│   ├── scripts/         # seedAdmin, seedDepartments, seedAcademicData, verifyWorkflow
+│   ├── tests/           # node --test suite (28 test files + support/)
+│   └── src/
+│       ├── server.js        # Entry: connect DB -> listen -> Socket.IO -> graceful shutdown
+│       ├── app.js           # Express app factory (helmet, CORS, rate-limit, /api/v1)
+│       ├── config/          # env.js (Zod-validated), db.js (mongoose)
+│       ├── constants/       # Roles, statuses, leave types, document limits
+│       ├── controllers/     # auth, hod, leave, department, class, tutor, student, parent, notification, health
+│       ├── models/          # User, Department, Class, Student, ParentStudent, LeaveApplication, LeaveApplicationHistory, Notification, RefreshSession
+│       ├── routes/          # All mounted under /api/v1
+│       ├── middleware/      # authenticate, authorizeRoles, authorizeDepartment/ParentAccess, validate, rateLimiter, errorHandler, notFound, uploadSupportingDocument
+│       ├── services/        # Business logic per resource + token, documentStorage, health
+│       ├── realtime/        # socketServer.js (per-user rooms, auth via handshake token)
+│       ├── utils/           # AppError, asyncHandler, cookies, databaseErrors, escapeRegExp
+│       └── validators/      # Zod request schemas per resource
+└── frontend/            # React + Vite + Tailwind SPA
+    ├── package.json
+    ├── vite.config.js       # Proxies /api and /socket.io to localhost:5000
+    ├── tailwind.config.js
+    ├── postcss.config.js
     ├── eslint.config.js
     ├── index.html
-    ├── package.json
-    ├── package-lock.json
-    ├── postcss.config.js
-    ├── tailwind.config.js
-    └── vite.config.js
+    └── src/
+        ├── App.jsx            # Role-based protected routes
+        ├── main.jsx
+        ├── context/           # AuthProvider (JWT + socket), DataProvider (backend + demo modes)
+        ├── services/api/      # Axios client + per-resource API modules + socketClient + transformers
+        ├── services/demoStore.js   # localStorage fallback engine
+        ├── pages/             # admin, hod, tutor, parent, auth, public, shared
+        ├── components/        # Routing, layout, forms, CRUD, leave workflow
+        ├── constants/         # Roles, navigation, leave metadata
+        ├── lib/               # Date, CSV, PDF, utility helpers
+        └── hooks/             # useAuth, useData, useLeavePdf, etc.
 ```
+
+---
+
+## Prerequisites
+
+- **Node.js 18+** (v20 recommended, v24 installed on the reference machine)
+- **npm** (bundled with Node.js)
+- **Docker Desktop** (for MongoDB container)
+- **Git** (optional, for cloning)
+
+---
 
 ## Installation
 
-Requirements: Node.js 18 or newer and npm.
+From the repository root:
 
 ```bash
-cd frontend
+# Backend dependencies
+cd backend
+npm install
+
+# Frontend dependencies
+cd ../frontend
 npm install
 ```
 
-## Run the frontend locally
+---
 
-From the `frontend/` directory:
+## Environment setup (backend)
 
-```bash
-npm run dev
-```
-
-Vite prints the local URL (default `http://localhost:5173`). Sign in through one of the four role portals, or use `/admin/login` for the administrator portal.
-
-Useful commands:
+Create `backend/.env` from `backend/.env.example`:
 
 ```bash
-npm test        # Node built-in test runner
-npm run lint    # ESLint
-npm run build   # Production build into frontend/dist
-npm run preview # Preview the production build
+cd backend
+cp .env.example .env
 ```
 
-## Demo credentials
+Edit `backend/.env`:
 
-All demo accounts, role/department/class links, and fictional credentials are listed in [DEMO_CREDENTIALS.md](DEMO_CREDENTIALS.md).
+```dotenv
+PORT=5000
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/clms
+CLIENT_URL=http://localhost:5173
+JWT_ACCESS_SECRET=replace_with_a_long_random_secret_at_least_32_chars
+JWT_REFRESH_SECRET=replace_with_another_long_random_secret_must_differ
+ADMIN_NAME=Initial Administrator
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=DemoOnly!Admin123
+```
 
-- The accounts use clearly fictional `@example.com` email addresses and `+1-202-555-01xx` telephone numbers.
-- Passwords are development-only placeholders prefixed with `DemoOnly!` and have no value outside this demo.
-- The data is stored in browser `localStorage` and can be reset from any Profile page.
+Rules:
+- `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` must each be at least 32 characters.
+- The two secrets must not be identical.
 
-## Current demo limitations
+Generate strong secrets:
 
-- **No backend is connected.** Authentication, authorization, notifications, file storage, and leave decisions are simulated in the browser.
-- Browser storage is not secure or shared between users. Clearing site data removes local changes.
-- Uploaded documents are represented as local metadata for validation; no file is sent to a server.
-- Approved-letter PDFs are demonstration documents and are not official college certificates.
-- A future backend must independently enforce every role and department rule, hash passwords with bcrypt/Argon2, store files securely, and keep credentials out of client code.
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
 
-## Future enhancements
+Never commit `.env`. It is gitignored.
 
-- Add a secured backend, database, and server-side role/department authorization.
-- Replace simulated accounts with institution-managed identity and password recovery.
-- Add audit logging, configurable approval policies, and real notification delivery.
-- Add deployment automation, accessibility checks, and end-to-end tests.
+---
+
+## Running locally (two terminals)
+
+### 1. Start MongoDB (Docker)
+
+```bash
+docker run -d --name clms-mongo -p 27017:27017 \
+  -v clms_mongo_data:/data/db mongo:7
+```
+
+Verify:
+
+```bash
+docker ps
+```
+
+To restart an existing stopped container:
+
+```bash
+docker start clms-mongo
+```
+
+### 2. Seed the database
+
+From `backend/`:
+
+```bash
+npm run seed:admin
+npm run seed:departments
+npm run seed:phase4
+```
+
+### 3. Start the servers
+
+**Terminal 1 — Backend:**
+
+```bash
+cd backend
+npm run dev      # http://localhost:5000
+```
+
+**Terminal 2 — Frontend:**
+
+```bash
+cd frontend
+npm run dev      # http://localhost:5173
+```
+
+Open `http://localhost:5173` in your browser.
+
+---
+
+## Default login credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Administrator | admin@example.com | DemoOnly!Admin123 |
+| Administrator 2 | admin2@example.com | DemoOnly!Admin456 |
+| HOD (CSE) | hod.dummy@example.test | DemoOnly!Hod789 |
+| Tutor (CSE, CSE-A) | tutor.dummy@example.test | DemoOnly!Tutor012 |
+| Parent | parent.dummy@example.test | DemoOnly!Parent345 |
+
+Login URLs:
+- Admin: `http://localhost:5173/admin/login`
+- HOD: `http://localhost:5173/login/hod`
+- Tutor: `http://localhost:5173/login/tutor`
+- Parent: `http://localhost:5173/login/parent`
+
+All passwords are development-only placeholders prefixed with `DemoOnly!`.
+
+---
+
+## API overview (`/api/v1`)
+
+| Resource | Routes |
+|----------|--------|
+| health | `GET /health` |
+| auth | `POST /login`, `/refresh`, `/logout`, `GET /me`, `POST /change-password` |
+| departments | CRUD + status + HOD read |
+| hods | CRUD + status (ADMIN only) |
+| classes | CRUD + status + tutor-scoped reads |
+| tutors | CRUD + status + self-service classes/students/approved-leaves |
+| students | CRUD + status + parent-linked children |
+| parents | CRUD + status + child links |
+| notifications | List my, unread count, mark read, mark all read |
+| leave-applications | Submit, approve, reject, reopen, list, my applications, history, document |
+
+All mutating endpoints enforce role- and department-scoped authorization server-side.
+
+---
+
+## Leave workflow
+
+1. **Submit:** Parent logs in, selects a linked child, fills leave type, date range, reason, optional document (<=5 MB). Status becomes `PENDING`.
+2. **Notify:** HOD of the student's department receives a `new_application` notification (Socket.IO + in-app).
+3. **Decide:** HOD reviews in `/hod/leave-requests`:
+   - **Approve** (optional remarks) → `APPROVED`; tutor and parent notified.
+   - **Reject** (mandatory reason >=15 chars) → `REJECTED`; parent notified; tutor never notified.
+   - **Reopen** (mandatory reason >=15 chars) → `REOPENED`; prior decision preserved in history; parent notified to correct and resubmit.
+4. **Tutor:** Sees only APPROVED leaves for assigned classes in `/tutor/approved-leaves`.
+5. **Admin:** Read-only oversight of all leave requests and department reports.
+
+---
+
+## Authentication
+
+- Access token (JWT, 15 minutes) returned in response body and held in memory.
+- Refresh token (7 days) set as an HttpOnly cookie (`clms_refresh_token`).
+- `authenticate` middleware reloads the user from MongoDB on every protected request — roles, departments, and status always come from the database, never from the client.
+- Socket.IO connections authenticate with the access token via the handshake `auth` payload; each user joins only their own `user:<userId>` room.
+- Refresh-token rotation on use; revocation on logout.
+
+---
+
+## Testing & linting
+
+```bash
+# Backend tests (requires MONGODB_URI_TEST)
+cd backend
+npm test
+
+# Frontend lint
+cd frontend
+npm run lint
+
+# Frontend build
+cd frontend
+npm run build
+```
+
+---
+
+## Windows 10 setup
+
+A step-by-step Windows 10 deployment guide (prerequisites, file export, backend/frontend setup, Docker, seeding, running, credentials, troubleshooting) is available in:
+
+```
+win_setup.txt
+```
+
+---
+
+## Known limitations
+
+- No production backend deployed; this is the local development backend.
+- Browser storage is not secure or shared between users.
+- Uploaded documents are local metadata only (no external/cloud storage configured by default).
+- Approved-letter PDFs are demonstration documents, not official college certificates.
+- A production deployment must: hash passwords server-side (already done), enforce role/department rules server-side (done), store files securely, keep secrets out of client code, and use HTTPS.
+
+---
+
+## Extending / adding users
+
+**Via Admin UI:** Log in as admin at `/admin/login`, then use `/admin/hods`, `/admin/tutors`, `/admin/students`, `/admin/parents` to create accounts.
+
+**Via API:** Authenticated admin calls `POST /api/v1/hods`, `/api/v1/tutors`, `/api/v1/students`, `/api/v1/parents` with a Bearer token.
+
+**Via script:** Write a Node script using the backend `User` model so passwords are bcrypt-hashed (never insert raw via mongosh, or logins will fail).
