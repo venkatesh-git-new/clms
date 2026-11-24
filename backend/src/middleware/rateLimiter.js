@@ -8,7 +8,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000
  */
 export const apiRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
-  limit: 100,
+  limit: 600,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

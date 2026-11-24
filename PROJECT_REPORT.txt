@@ -1,0 +1,366 @@
+================================================================================
+COLLEGE LEAVE MANAGEMENT SYSTEM (CLMS) - PROJECT REPORT
+================================================================================
+
+1. OVERVIEW
+--------------------------------------------------------------------------------
+Project        : College Leave Management System (CLMS)
+Architecture   : MERN stack (MongoDB, Express, React, Node.js)
+Mode           : Local development with real backend + MongoDB; frontend can
+                 fall back to browser localStorage demo mode when no backend
+                 token is present
+Roles (4)      : Administrator, Head of Department (HOD), Class Tutor,
+                 Parent / Guardian
+Status         : Fully deployable locally; backend seeded and running,
+                 frontend running on Vite dev server
+
+2. TECH STACK
+--------------------------------------------------------------------------------
+FRONTEND (frontend/)
+----------------------------------------------------
+Layer          Technology           Version / Purpose
+-------------- -------------------- ------------------------------------------
+Framework      React 18             UI library
+Build tool     Vite 5               Dev server + production build
+Routing        React Router 6       Role-based protected routes
+Styling        Tailwind CSS +       Utility-first CSS
+               PostCSS
+Forms          React Hook Form +    Form state + schema validation
+               Zod
+Charts         Recharts             Dashboard analytics
+Icons          Lucide React         Iconography
+Notifications  React Hot Toast      Toast alerts
+PDF            jsPDF                Leave letter generation
+HTTP client    Axios                API calls with interceptors (auth retry /
+                                           refresh)
+Real-time      socket.io-client     Live notification push
+Testing        Node built-in test   Unit / integration tests
+               runner (node --test)
+Linting        ESLint 9             Code quality
+
+BACKEND (backend/)
+----------------------------------------------------
+Layer          Technology           Version / Purpose
+-------------- -------------------- ------------------------------------------
+Runtime        Node.js (>=20)       Server runtime
+Framework      Express 5            REST API
+ODM            Mongoose 9           MongoDB object modeling
+Database       MongoDB              Document store
+Password hashing bcryptjs          Secure password storage
+Auth tokens    jsonwebtoken         Access + refresh JWTs
+Cookie handling cookie-parser      HttpOnly refresh-token cookie
+CORS           cors                 Cross-origin requests (frontend<->backend)
+Security       helmet               HTTP header hardening
+Rate limiting  express-rate-limit   Abuse protection
+Logging        morgan               HTTP request logger
+File uploads   multer               Supporting documents
+Real-time      socket.io            WebSocket notifications
+Validation     zod                  Environment + input schemas
+Dev tooling    nodemon              Auto-restart in dev
+
+INFRASTRUCTURE
+--------------------------------------------------------------
+Database       MongoDB 7 running in Docker container (clms-mongo), port 27017,
+               database name clms
+Ports          Backend 5000, Frontend 5173
+Proxy          Vite dev server proxies /api and /socket.io to
+               http://localhost:5000
+
+3. PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+Leave-Letter-Management/
+├── README.md
+├── PROJECT_REPORT.txt
+├── backend/
+│   ├── src/
+│   │   ├── app.js              # Express app factory
+│   │   ├── server.js           # Entry point (DB connect -> listen -> Socket.IO)
+│   │   ├── config/             # env (zod validation), db (mongoose)
+│   │   ├── controllers/        # Route handlers (auth, hod, leave, etc.)
+│   │   ├── models/             # Mongoose schemas (User, Department, Class, ...)
+│   │   ├── routes/             # Express routers mounted under /api/v1
+│   │   ├── middleware/         # Auth, role, error, rate-limit, not-found
+│   │   ├── services/           # Business logic (auth service, etc.)
+│   │   ├── realtime/           # Socket.IO server
+│   │   ├── utils/              # Helpers (cookies, asyncHandler, DB errors)
+│   │   └── validators/         # Zod request schemas
+│   ├── scripts/                # seedAdmin, seedDepartments, seedAcademicData
+│   ├── tests/                  # Backend test suite
+│   ├── .env / .env.example
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx             # Route definitions
+│   │   ├── main.jsx
+│   │   ├── context/            # AuthProvider, DataProvider (backend + demo modes)
+│   │   ├── services/api/       # Axios client + per-resource API modules
+│   │   ├── services/demoStore.js   # localStorage fallback engine
+│   │   ├── pages/              # admin, hod, tutor, parent, auth, shared, public
+│   │   ├── components/         # Shared UI, layout, forms, CRUD, leave workflow
+│   │   ├── constants/          # Roles, navigation, leave metadata
+│   │   ├── lib/                # Date, CSV, PDF, utility helpers
+│   │   └── hooks/              # useAuth, etc.
+│   ├── .env                    # VITE_API_URL, VITE_SOCKET_URL
+│   ├── vite.config.js          # Dev proxy to backend
+│   └── package.json
+
+4. BACKEND DETAILS
+--------------------------------------------------------------------------------
+ENTRY & SERVER LIFECYCLE (src/server.js)
+--------------------------------------------------------------
+1. Connects to MongoDB via connectDatabase() - server does NOT listen until DB
+   is reachable.
+2. Creates Express app via createApp().
+3. Listens on configured PORT (default 5000).
+4. Initializes Socket.IO on the same HTTP server (shared CORS origins).
+5. Graceful shutdown on SIGINT/SIGTERM: closes Socket.IO -> HTTP server ->
+   MongoDB.
+
+ENVIRONMENT (src/config/env.js)
+--------------------------------------------------------------
+Validated with Zod:
+  NODE_ENV, PORT, MONGODB_URI, CLIENT_URL
+  JWT_ACCESS_SECRET / JWT_REFRESH_SECRET (min 32 chars, must differ)
+
+DATABASE (src/config/db.js)
+--------------------------------------------------------------
+- Mongoose connection with strictQuery: true
+- serverSelectionTimeoutMS: 10_000
+- Connection-state logging; secrets redacted from error messages
+
+API BASE PATH
+--------------------------------------------------------------
+All routes mounted under /api/v1:
+  Resource         Routes
+  ---------------- -----------------------------------------------------------
+  health           /health
+  auth             /auth/login, /auth/refresh, /auth/logout, /auth/me,
+                   /auth/change-password
+  departments      CRUD + status
+  hods             CRUD + status
+  classes          CRUD + status
+  tutors           CRUD + status, my classes/students/approved leaves
+  students         CRUD + status
+  parents          CRUD + status, children management
+  notifications    List my, mark read, mark all read
+  leave-applications Submit, approve, reject, reopen, list, my applications
+
+MONGOOSE MODELS (src/models/)
+--------------------------------------------------------------
+Model              Key Fields
+------------------ -----------------------------------------------------------
+User               fullName, email (unique), password (hashed),
+                   role (ADMIN/HOD/TUTOR/PARENT), department,
+                   assignedClasses, employeeId, accountStatus,
+                   mustChangePassword
+Department         name, code, nameKey, status, hodId/hodName/hodEmail
+Class              className, year, section, department, classNameKey,
+                   assignedTutor, status
+Student            fullName, registerNumber, email, phone, department,
+                   class, parentId, relationship, accountStatus
+Parent             linked via ParentStudent to students
+ParentStudent      parent, student, relationship (Father/Mother/Guardian)
+LeaveApplication   studentId, parentId, leaveType, dates, reason, document,
+                   status, decisions, history
+LeaveApplicationHistory embedded history array on leave docs
+Notification       type, title, message, recipients, readBy, createdAt,
+                   applicationId
+RefreshSession     token storage for refresh rotation
+
+SECURITY FEATURES
+--------------------------------------------------------------
+- Passwords hashed with bcrypt (12 salt rounds), select: false on password
+- JWT access token (short-lived) + refresh token (HttpOnly cookie)
+- Role-based authorization middleware
+- Department-scoped HOD/tutor authorization
+- Rate limiting, helmet headers, CORS origin whitelist
+- File upload size limits (5 MB max for documents)
+
+5. DATABASE
+--------------------------------------------------------------------------------
+Engine      : MongoDB (Docker container clms-mongo, image mongo:7)
+Connection  : mongodb://localhost:27017/clms
+Persistence : Docker volume clms_mongo_data
+Seed data   : npm run seed:admin     - creates admin bootstrap account
+              npm run seed:departments - creates 5 departments (CSE, IT,
+                                        ECE, MECH, MCA)
+              npm run seed:phase4    - creates classes, tutors, students,
+                                        parents with links
+Viewing DB  : mongosh mongodb://localhost:27017/clms
+              show collections
+              db.users.find().pretty()
+
+6. AUTHENTICATION FLOW
+--------------------------------------------------------------------------------
+LOGIN
+--------------------------------------------------------------
+1. User submits email + password on a role-specific login page
+   (/login/hod, /login/tutor, /login/parent, /admin/login).
+2. Frontend calls POST /api/v1/auth/login.
+3. Backend validates credentials, returns:
+   - accessToken (JWT, in response body)
+   - refreshToken (set as HttpOnly cookie)
+   - user object (role, department, etc.)
+4. Frontend stores the access token in memory and the user in
+   localStorage/sessionStorage.
+5. Socket.IO connection is established with the token for real-time
+   notifications.
+
+TOKEN REFRESH
+--------------------------------------------------------------
+- On app load, AuthProvider calls POST /api/v1/auth/refresh using the refresh
+  cookie to silently restore the session.
+- API client (apiClient.js) has an interceptors chain: on 401, it retries
+  with a refreshed access token; if refresh fails, it logs the user out.
+
+LOGOUT
+--------------------------------------------------------------
+- Calls POST /api/v1/auth/logout, clears the refresh cookie, removes
+  token/user from storage, disconnects Socket.IO.
+
+PASSWORD CHANGE
+--------------------------------------------------------------
+- POST /api/v1/auth/change-password validates current password, hashes the
+  new one, issues a new access token.
+
+ROUTE PROTECTION
+--------------------------------------------------------------
+- Frontend ProtectedRoute checks user.role against the required route role.
+- Backend middleware enforces role/department authorization on every mutating
+  endpoint.
+
+7. LEAVE WORKFLOW
+--------------------------------------------------------------------------------
+1. SUBMIT: Parent logs in, selects a linked child, fills leave type, date
+   range, reason, optional document (<=5 MB). Submits -> status pending.
+2. NOTIFY: HOD of the student's department receives a new_application
+   notification (Socket.IO + in-app).
+3. DECIDE: HOD reviews in /hod/leave-requests:
+   - Approve (with optional remarks) -> status approved, tutor of the
+     student's class notified, parent notified.
+   - Reject (mandatory reason >=15 chars) -> status rejected, parent
+     notified, tutor NEVER notified.
+   - Reopen (mandatory reason >=15 chars) -> status reopened, prior
+     decision preserved in history, parent notified to correct and
+     resubmit.
+4. TUTOR: Sees only approved leaves for their assigned classes in
+   /tutor/approved-leaves.
+5. ADMIN: Read-only oversight of all leave requests and department reports.
+
+8. FRONTEND-BACKEND INTEGRATION
+--------------------------------------------------------------------------------
+frontend/src/context/DataProvider.jsx:
+- Detects backend auth via user.isBackend || getAccessToken().
+- Backend mode: Calls REST API for all CRUD and leave operations, refreshes
+  local cache after each mutation.
+- Demo mode: Falls back to demoStore.js (localStorage) with seeded mock data
+  and relationship validation.
+- Socket listeners (onNewNotification, onNotificationRead) push real-time
+  updates into the local cache.
+
+API Client (frontend/src/services/api/client.js):
+- Axios instance with baseURL from VITE_API_URL (empty -> Vite proxy to
+  localhost:5000).
+- withCredentials: true (sends refresh cookie).
+- Automatic Bearer header injection from in-memory access token.
+- 401 intercept -> refresh token -> retry queue.
+
+9. RUNNING LOCALLY
+--------------------------------------------------------------------------------
+PREREQUISITES
+--------------------------------------------------------------
+- Node.js 18+ (v24 installed)
+- Docker (for MongoDB)
+
+ONE-TIME SETUP
+--------------------------------------------------------------
+  # 1. Start MongoDB
+  docker run -d --name clms-mongo -p 27017:27017 \
+    -v clms_mongo_data:/data/db mongo:7
+
+  # 2. Install dependencies (already done in this repo)
+  cd backend && npm install
+  cd ../frontend && npm install
+
+START (two terminals)
+--------------------------------------------------------------
+  # Terminal 1 - Backend
+  cd backend && npm run dev      # http://localhost:5000
+
+  # Terminal 2 - Frontend
+  cd frontend && npm run dev     # http://localhost:5173
+
+SEED THE DATABASE
+--------------------------------------------------------------
+  cd backend
+  npm run seed:admin
+  npm run seed:departments
+  npm run seed:phase4
+
+USEFUL COMMANDS
+--------------------------------------------------------------
+  Command          Location   Purpose
+  ---------------- ---------- -------------------------------------------
+  npm run dev      backend   Start API + Socket.IO (nodemon)
+  npm run dev      frontend  Start Vite dev server
+  npm test         backend   Run test suite (needs MONGODB_URI_TEST)
+  npm run lint     frontend  ESLint
+  npm run build    frontend  Production build to dist
+  npm run seed:... backend   Bootstrap admin / seed demo data
+
+10. DEFAULT / DEMO CREDENTIALS
+--------------------------------------------------------------------------------
+All passwords are development-only placeholders prefixed with DemoOnly!.
+
+  Role              Email                         Password
+  ----------------- --------------------------------- ----------------
+  Administrator     admin@example.com             DemoOnly!Admin123
+  Administrator 2   admin2@example.com            DemoOnly!Admin456
+  HOD (CSE)         hod.dummy@example.test        DemoOnly!Hod789
+  Tutor (CSE, CSE-A) tutor.dummy@example.test     DemoOnly!Tutor012
+  Parent            parent.dummy@example.test     DemoOnly!Parent345
+                    (child: Ananya Sharma CSE24001)
+
+LOGIN URLs:
+  Admin     : http://localhost:5173/admin/login
+  HOD       : http://localhost:5173/login/hod
+  Tutor     : http://localhost:5173/login/tutor
+  Parent    : http://localhost:5173/login/parent
+
+11. KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+- No production backend deployed; this is the local dev backend.
+- Browser storage is not secure or shared between users.
+- Uploaded documents are local metadata only (no external storage configured
+  by default).
+- Approved-letter PDFs are demonstration documents.
+- A production deployment must: hash passwords server-side (already done),
+  enforce role/department rules server-side (done), store files securely,
+  keep secrets out of client code, and use HTTPS.
+
+12. EXTENDING / ADDING USERS
+--------------------------------------------------------------------------------
+Via Admin UI:
+  Log in as admin at /admin/login, then use /admin/hods, /admin/tutors,
+  /admin/students, /admin/parents to create accounts.
+
+Via API:
+  Authenticated admin calls POST /api/v1/hods, /api/v1/tutors,
+  /api/v1/students, /api/v1/parents with a Bearer token.
+
+Via script:
+  Write a Node script using the backend User model so passwords are
+  bcrypt-hashed (never insert raw via mongosh, or logins will fail).
+
+================================================================================
+CURRENT RUNNING STATE
+================================================================================
+MongoDB (Docker)      : OK
+Backend (localhost:5000): OK
+Frontend (localhost:5173): OK
+Database seeded       : OK
+All four dummy users  : Verified login OK
+Frontend lint         : Clean
+================================================================================
+END OF REPORT
+================================================================================
